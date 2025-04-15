@@ -1,14 +1,15 @@
-import requests
-import speech_recognition as sr
-import json
-import time
-import difflib
-import os
-import re
+import requests  # to make HTTP requests to the flask server to communicate with python3 server
+import speech_recognition as sr  # for mic input
+import json  # for passwords
+import time  # controls timing of responses
+import difflib  # for matching passwords to similar inputs
+import os  # file handling
+import re  # cleans input
+import bcrypt  # for hashing passwords
 
-SERVER_IP = "127.0.0.1"
+SERVER_IP = "127.0.0.1"  # localhost IP address for flask communication
 PORT = 5000
-TEXT_OUTPUT = "latest_response.txt"
+TEXT_OUTPUT = "latest_response.txt"  # stores latest responses from pepper
 
 # Load known passwords
 def load_known_passwords():
@@ -25,10 +26,15 @@ def say(text):
     with open(TEXT_OUTPUT, "w") as f:
         f.write(clean)
     print(f"Pepper says: {clean}")
-    time.sleep(1.5)
+    time.sleep(1.5)  # Allows time for Pepper to finish speaking before continuing
 
 # Match to known password
 def match_password(spoken, known_passwords):
+    spoken = spoken.replace("sunshine please", "sunshine").replace("sunshine yeah", "sunshine").strip()
+
+    if spoken == "sunshine":
+        return "sunshine"  # Directly match 'sunshine'
+    
     matches = difflib.get_close_matches(spoken, known_passwords, n=1, cutoff=0.6)
     return matches[0] if matches else None
 
@@ -36,13 +42,12 @@ def match_password(spoken, known_passwords):
 def is_valid_transcription(text):
     if not text:
         return False
-    # Reject if it contains mostly non-ASCII characters
     if len([ch for ch in text if ord(ch) > 127]) > 10:
         return False
     return True
 
 # Whisper STT input with a longer timeout and better error handling
-def get_speech_input(timeout=20):  # Increased timeout to allow for clearer speech capture
+def get_speech_input(timeout=20):
     recognizer = sr.Recognizer()
     with sr.Microphone() as source:
         print("Listening for input...")
@@ -75,7 +80,7 @@ def get_confirmation():
     confirmation = get_speech_input(timeout=8)
     if confirmation:
         print(f"Whisper heard: {confirmation}")
-        if is_affirmative(confirmation):
+        if is_affirmative(confirmation):  # Checks if the response is affirmative
             return True
     return False
 
@@ -93,18 +98,44 @@ def init_user(password):
 # Send message to GPT
 def chat_with_gpt(user_password, user_input):
     try:
+        # Ensure user input isn't empty
+        if not user_input.strip():
+            return "Sorry, I didn't catch that. Could you repeat?"  # Handle empty input gracefully
+
         response = requests.post(
             f"http://{SERVER_IP}:{PORT}/chat",
             json={"user": user_password, "message": user_input}
         )
         if response.status_code == 200:
-            return response.json().get("response", "Sorry, no response from server.")
+            response_text = response.json().get("response", "")
+            if not response_text:
+                return "Sorry, I didn't catch that. Could you repeat?"  # Handle empty response
+            return response_text
         else:
             print(f"Server returned error: {response.status_code}")
             return "Server error occurred."
     except Exception as e:
         print(f"Error during server request: {e}")
         return "Error: " + str(e)
+
+# Shortens long responses to a maximum length
+def shorten_response(response, max_length=35):  # max_length is the number of words allowed
+    words = response.split()
+    if len(words) > max_length:
+        return ' '.join(words[:max_length]) + "..."
+    return response
+
+# Function to calculate the listening delay based on word count
+def calculate_delay(response):
+    word_count = len(response.split())
+    delay = word_count * 0.35  # 0.3 seconds per word
+    return delay + 1  # Add 1 second buffer
+
+# Wait for response to be finished before listening
+def wait_for_response_to_finish(response):
+    delay_time = calculate_delay(response)
+    print(f"Waiting for {delay_time} seconds before listening.")
+    time.sleep(delay_time)
 
 # MAIN Loop
 def main():
@@ -124,7 +155,7 @@ def main():
         if matched:
             say(f"Did you say {matched}? Say yes or no.")
             if get_confirmation():
-                password = matched
+                password = matched  # Sets the password if confirmed
                 break
             else:
                 say("Okay, try again.")
@@ -149,6 +180,7 @@ def main():
 
     silence_counter = 0
     while True:
+        
         print("You can now speak.")
         user_input = get_speech_input(timeout=30)  # Increased timeout for game
 
@@ -172,11 +204,13 @@ def main():
         if "let's play a game" in user_input.lower():
             say("Let's play 'Would You Rather'!")
             response = chat_with_gpt(password, "let's play a game")
+            response = shorten_response(response)  # Shorten the response
             say(response)
+            wait_for_response_to_finish(response)  # Wait before listening again
             continue  # Skip normal conversation and go straight to game handling
 
         # Check for possible farewell
-        farewell_keywords = ["bye", "goodbye", "stop", "exit"]
+        farewell_keywords = ["bye", "goodbye", "exit"]
         if any(word in user_input.lower() for word in farewell_keywords):
             say("Did you mean to end our conversation? Please say yes Pepper or no Pepper.")
             confirmation = get_speech_input(timeout=8)
@@ -189,7 +223,10 @@ def main():
 
         response = chat_with_gpt(password, user_input)
         print(f"Pepper (will speak): {response}")
+        response = shorten_response(response)  # Shorten the response
         say(response)
+        wait_for_response_to_finish(response)  # Wait before listening again
 
 if __name__ == "__main__":
     main()
+

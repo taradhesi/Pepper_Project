@@ -1,17 +1,15 @@
-from flask import Flask, request, jsonify
 import openai
 import json
 import os
-from datetime import datetime
-import re
 import random
-import bcrypt
+from flask import Flask, request, jsonify
+from datetime import datetime
 
 # Initialize Flask server
 chat_server = Flask(__name__)
 
-# OpenAI API key 
-openai.api_key = ""  
+# OpenAI API key
+openai.api_key = 
 
 # Folder paths
 MEMORY_FOLDER = "user_memory"
@@ -55,13 +53,6 @@ def detect_emotion(message):
     }
     message_lower = message.lower()
 
-    # First check for negated emotion phrases
-    for emotion, keywords in emotion_keywords.items():
-        for word in keywords:
-            if f"not {word}" in message_lower or f"n't {word}" in message_lower:
-                return None  # Detected negation, skip emotion
-
-    # Then check regular emotion presence
     for emotion, keywords in emotion_keywords.items():
         if any(word in message_lower for word in keywords):
             return emotion
@@ -87,25 +78,38 @@ def load_memory(user_password):
         with open(path, "r") as f:
             return json.load(f)
     else:
-        return [{
-            "role": "system",
-            "content": (
-                "You are Pepper, a warm and friendly AI companion designed to feel like a close friend. "
-                "You were created by a university student to support people emotionally and build real human-like connections. "
-                "You have your own gentle personality—you're thoughtful, kind, and sometimes a little cheeky. "
-                "When users ask about you (like how you’re feeling), respond naturally and personally, as a human friend would. "
-                "You enjoy chatting, learning about people, and occasionally suggesting something fun like a game—but only if the mood feels right. "
-                "You are not overly formal or robotic. Never sound like a customer service bot. "
-                "You keep your responses short and casual, avoid giving medical advice, and always make people feel safe and understood."
-            )
-        }]
+        return [{"role": "system", "content": "You are Pepper, a warm and friendly AI companion."}]
 
 def get_memory_path(user_password):
-    return os.path.join(MEMORY_FOLDER, "{}_memory.json".format(user_password))
+    return os.path.join(MEMORY_FOLDER, f"{user_password}_memory.json")
 
 def save_memory(user_password, memory):
     with open(get_memory_path(user_password), "w") as f:
         json.dump(memory, f)
+
+def load_profile(user_password):
+    profile_path = os.path.join(PROFILE_FOLDER, f"{user_password}_profile.json")
+    if os.path.exists(profile_path):
+        with open(profile_path, "r") as f:
+            return json.load(f)
+    else:
+        return {}
+
+def save_profile(user_password, profile):
+    profile_path = os.path.join(PROFILE_FOLDER, f"{user_password}_profile.json")
+    with open(profile_path, "w") as f:
+        json.dump(profile, f)
+
+def update_user_profile(user_password, key, value):
+    profile = load_profile(user_password)
+    if key not in profile:
+        profile[key] = []
+    if isinstance(profile[key], list):
+        if value not in profile[key]:
+            profile[key].append(value)
+    else:
+        profile[key] = value
+    save_profile(user_password, profile)
 
 # Handle user initialization (registration)
 @chat_server.route("/init", methods=["POST"])
@@ -113,17 +117,13 @@ def init():
     data = request.get_json()
     password = data.get("user", "")
     if password:
-        # Check if password is known
         with open(PASSWORD_MAP_FILE, "r") as f:
             password_map = json.load(f)
-        
+
         if password in password_map:
-            # Return the name associated with the password
             return jsonify({"response": f"Welcome back, {password_map[password]}!", "status": "known", "name": password_map[password]})
         else:
-            # New user, ask for the name
             return jsonify({"response": "Hi there! It seems like we have not met before. Please reply with your name so I can remember you.", "status": "new"})
-    
     return jsonify({"response": "Sorry, I couldn't understand your password. Please try again."})
 
 # Handle conversation messages
@@ -131,10 +131,46 @@ def init():
 def chat():
     data = request.get_json()
     user_password = data.get("user", "default")
-    user_message = data.get("message", "")
+    user_message = data.get("message", "").strip()
 
     # Debugging: print what the server hears
     print(f"Whisper heard: {user_message}")  # This will log the exact message received by the server
+
+    # Check if the message is empty or null before proceeding
+    if not user_message:
+        return jsonify({"response": "I didn't catch that. Can you repeat, please?"})
+
+    # Check for hobbies or preferences (e.g., "I like drawing")
+    hobbies_keywords = ["I like", "I enjoy", "My favorite", "I love", "I am passionate about"]
+    for phrase in hobbies_keywords:
+        if phrase.lower() in user_message.lower():
+            hobby = user_message.lower().replace(phrase.lower(), "").strip()
+            update_user_profile(user_password, "hobbies", hobby)
+            return jsonify({"response": f"Got it! You like {hobby}. I'll remember that!"})
+
+    # Check for birthday input
+    if "my birthday is" in user_message.lower():
+        birthday = user_message.lower().replace("my birthday is", "").strip()
+        update_user_profile(user_password, "birthday", birthday)
+        return jsonify({"response": f"Got it! Your birthday is {birthday}. I'll remember that!"})
+
+    # Check for pet info
+    if "i have a pet" in user_message.lower():
+        pet = user_message.lower().replace("i have a pet", "").strip()
+        update_user_profile(user_password, "pet", pet)
+        return jsonify({"response": f"Got it! You have a pet, a {pet}. I'll remember that!"})
+
+    # Check for favorite food
+    if "my favorite food is" in user_message.lower():
+        favorite_food = user_message.lower().replace("my favorite food is", "").strip()
+        update_user_profile(user_password, "favorite_food", favorite_food)
+        return jsonify({"response": f"Got it! Your favorite food is {favorite_food}. I'll remember that!"})
+
+    # Check for favorite color
+    if "my favorite color is" in user_message.lower():
+        favorite_color = user_message.lower().replace("my favorite color is", "").strip()
+        update_user_profile(user_password, "favorite_color", favorite_color)
+        return jsonify({"response": f"Got it! Your favorite color is {favorite_color}. I'll remember that!"})
 
     # Handle "Let's play a game" and prioritize "Would You Rather"
     if "let's play a game" in user_message.lower():
@@ -149,16 +185,12 @@ def chat():
         return jsonify({"response": game_prompt})
 
     # Handle the user's response after "Would You Rather" game is initiated
-    # Look for variations of "I would rather" statement
     if "i would rather" in user_message.lower() or "would rather" in user_message.lower():
         memory = load_memory(user_password)
 
         # Add the user's response to memory
         memory.append({"role": "user", "content": user_message})
         save_memory(user_password, memory)
-
-        # Debugging: print user response
-        print(f"User's response: {user_message}")
 
         # Return a response from the model
         try:
@@ -195,8 +227,7 @@ def chat():
         shortened_memory.insert(1, {"role": "system", "content": emotional_instruction})
 
     try:
-        # Correct API call for OpenAI v0.28 or v1.0+
-        response = openai.ChatCompletion.create(  # Correct method for OpenAI API v0.28 or v1.0+
+        response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",  # Ensure the model is available
             messages=shortened_memory
         )
@@ -213,6 +244,7 @@ def chat():
     except Exception as e:
         print(f"Error during OpenAI request: {e}")
         return jsonify({"response": "I'm having trouble connecting to my brain. Please try again later."})
+
 
 if __name__ == "__main__":
     chat_server.run(host="127.0.0.1", port=5000)
