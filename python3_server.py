@@ -5,12 +5,15 @@ import random
 from flask import Flask, request, jsonify
 from datetime import datetime
 import bcrypt
+import time 
+
 
 # Initialize Flask server
 chat_server = Flask(__name__)
 
 # OpenAI API key
 openai.api_key = 
+
 # Folder paths
 MEMORY_FOLDER = "user_memory"
 PROFILE_FOLDER = "user_profiles"
@@ -42,6 +45,42 @@ MENTAL_HEALTH_CONDITIONS = [
     "depression", "anxiety", "stress", "bipolar", "schizophrenia", "ptsd", 
     "ocd", "phobia", "panic disorder", "eating disorder", "addiction"
 ]
+
+
+# Function to log response times to a file for analysis
+#def log_response_time(user_password, response_time, word_length):
+     # Debug print to check the function is being called
+ #   print("Logging response time and word length...")
+    # Log the response time to a file (you can customize this as needed)
+  #  log_entry = {
+   #     "user_password": user_password,
+    #    "timestamp": datetime.now().isoformat(),
+     #   "response_time": response_time , # in seconds
+      #  "word_length": word_length  # number of words in the response
+    #}
+
+     # Log file path
+    #log_file = "response_times_log.json"
+
+    # If the log file exists, append to it, otherwise create a new one
+    #if os.path.exists(log_file):
+     #   print("Log file exists. Appending to the file...")
+      #  with open(log_file, "r") as f:
+        #    logs = json.load(f)
+       # logs.append(log_entry)
+        #print("Log file does not exist. Creating new file...")
+    #else:
+     #   logs = [log_entry]
+
+    #try:
+    #    with open(log_file, "w") as f:
+     #       json.dump(logs, f, indent=4)
+     #   print(f"Log saved successfully to {log_file}")
+    #except Exception as e:
+      #  print(f"Error saving log: {e}")
+
+
+    
 
 def get_user_name():
     # Prompt the user to speak their name
@@ -89,9 +128,9 @@ def detect_emotion(message):
     return None
 
 def check_mental_health_condition(user_message):
-    """
-    Check if the user mentions any known mental health condition in their message.
-    """
+
+   # Check if the user mentions any known mental health condition in their message.
+    
     user_message_lower = user_message.lower()
 
     for condition in MENTAL_HEALTH_CONDITIONS:
@@ -119,7 +158,11 @@ def load_memory(user_password):
         with open(path, "r") as f:
             return json.load(f)
     else:
-        return [{"role": "system", "content": "You are Pepper, a warm and friendly AI companion."}]
+        return [{"role": "system", "content": "You are Pepper, a warm and friendly AI companion designed to help those suffering from mental health struggles. "
+            "Keep your responses short and concise with no more than 20-30 words. "
+            "Avoid providing medical diagnoses. Always respond in a human-like, empathetic, and supportive manner."
+            "Your role is to offer encouragement, listen, and provide helpful suggestions, not to diagnose or treat medical conditions."
+            "Ensure you maintain a compassionate and understanding tone."}]
 
 def get_memory_path(user_password):
     return os.path.join(MEMORY_FOLDER, f"{user_password}_memory.json")
@@ -164,17 +207,24 @@ def init():
             password_map = json.load(f)
 
         if password in password_map:
-            # If password exists, greet the user with their name
-            return jsonify({"response": f"Welcome back, {password_map[password]['name']}!", "status": "known", "name": password_map[password]['name']})
+            # If the password exists, check the hashed password
+            stored_hash = password_map[password]["hash"]
+            if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
+                # If the password is correct, return a response
+                return jsonify({"response": f"Welcome back, {password_map[password]['name']}!", "status": "known", "name": password_map[password]['name']})
+            else:
+                return jsonify({"response": "Error: Incorrect password. Please try again.", "status": "error"})
         else:
-            # If password is new, hash the password and ask for the user's name
+            # If the password is new, hash it and store it
             hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
-            # Prompt the user for their name
+            # Prompt the user for their name (implement this in your client)
             user_name = get_user_name()
 
-            # Store the password and name in the password map
+            # Store the new password and name in the password map
             password_map[password] = {"hash": hashed_password, "name": user_name}
+
+            # Save the updated password map to the file
             with open(PASSWORD_MAP_FILE, "w") as f:
                 json.dump(password_map, f)
 
@@ -182,13 +232,16 @@ def init():
             save_profile(password, {"name": user_name})
 
             return jsonify({"response": f"Hi {user_name}! It seems like we have not met before. I'll remember you from now on.", "status": "new"})
-    
+
     return jsonify({"response": "Sorry, I couldn't understand your password. Please try again."})
 
 
 # Handle conversation messages
 @chat_server.route("/chat", methods=["POST"])
 def chat():
+
+    #log_response_time("test_user", 0.45, 100)  # Just for testing uncomment when done
+
     data = request.get_json()
     user_password = data.get("user", "default")
     user_message = data.get("message", "").strip()
@@ -213,6 +266,10 @@ def chat():
     if not user_message:
         return jsonify({"response": "I didn't catch that. Can you repeat, please?"})
     
+        
+    # Start timing before sending the request to OpenAI API FOR RESPONSE LOGGING
+   # start_time = time.time()
+    
      # Check for mental health conditions and update the profile if needed
     mental_health_keywords = ["depression", "anxiety", "stress", "burnout", "sad", "worried", "bipolar", "schizophrenia", "ptsd", 
     "ocd", "phobia", "panic disorder", "eating disorder", "addiction"]
@@ -221,7 +278,8 @@ def chat():
         if condition in user_message.lower():
             # Update the profile with the detected mental health condition
             update_user_profile(user_password, "mental_health_conditions", condition)
-            return jsonify({"response": f"Got it! You mentioned {condition}. I'll remember that."})
+
+            break
   
 
 
@@ -231,32 +289,33 @@ def chat():
         if phrase.lower() in user_message.lower():
             hobby = user_message.lower().replace(phrase.lower(), "").strip()
             update_user_profile(user_password, "hobbies", hobby)
-            return jsonify({"response": f"Got it! You like {hobby}. I'll remember that!"})
+
+            break
     
 
     # Check for birthday input
     if "my birthday is" in user_message.lower():
         birthday = user_message.lower().replace("my birthday is", "").strip()
         update_user_profile(user_password, "birthday", birthday)
-        return jsonify({"response": f"Got it! Your birthday is {birthday}. I'll remember that!"})
+        
 
     # Check for pet info
     if "i have a pet" in user_message.lower():
         pet = user_message.lower().replace("i have a pet", "").strip()
         update_user_profile(user_password, "pet", pet)
-        return jsonify({"response": f"Got it! You have a pet, a {pet}. I'll remember that!"})
+        
 
     # Check for favorite food
     if "my favorite food is" in user_message.lower():
         favorite_food = user_message.lower().replace("my favorite food is", "").strip()
         update_user_profile(user_password, "favorite_food", favorite_food)
-        return jsonify({"response": f"Got it! Your favorite food is {favorite_food}. I'll remember that!"})
+        
 
     # Check for favorite color
     if "my favorite color is" in user_message.lower():
         favorite_color = user_message.lower().replace("my favorite color is", "").strip()
         update_user_profile(user_password, "favorite_color", favorite_color)
-        return jsonify({"response": f"Got it! Your favorite color is {favorite_color}. I'll remember that!"})
+        
 
     # Handle "Let's play a game" and prioritize "Would You Rather"
     if "let's play a game" in user_message.lower():
@@ -336,6 +395,19 @@ def chat():
             model="gpt-3.5-turbo",  # Ensure the model is available
             messages=shortened_memory
         )
+
+         # End timing after receiving the response
+        end_time = time.time()
+#
+        # Calculate the response time (in seconds)
+        #response_time = end_time - start_time
+
+        # Get the AI's response and calculate the word length (word count)
+        ai_reply = response['choices'][0]['message']['content']
+        word_length = len(ai_reply.split())  # Count the number of words in the response
+
+       # log_response_time(user_password, response_time, word_length)  # Log the response time
+
         ai_reply = response['choices'][0]['message']['content']
 
         # Ensure the response is valid and non-empty
