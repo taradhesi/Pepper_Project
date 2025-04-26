@@ -1,30 +1,30 @@
-import openai
-import json
+import openai #chatGPT
+import json 
 import os
-import random
-from flask import Flask, request, jsonify
-from datetime import datetime
-import bcrypt
+import random #selects random game q's
+from flask import Flask, request, jsonify #communication server
+from datetime import datetime #for date and timestamps
+import bcrypt #for hashing passwords
 import time 
 
 
-# Initialize Flask server
+# Initialise Flask server
 chat_server = Flask(__name__)
 
 # OpenAI API key
-openai.api_key = 
+openai.api_key = "
 
 # Folder paths
 MEMORY_FOLDER = "user_memory"
 PROFILE_FOLDER = "user_profiles"
 CONCERN_FOLDER = "concerning_logs"
 
-# Ensure folders exist
+#Ensures folders exist
 for folder in [MEMORY_FOLDER, PROFILE_FOLDER, CONCERN_FOLDER]:
     if not os.path.exists(folder):
         os.makedirs(folder)
 
-# Path to password-to-user mapping file
+#Path to password-to-user mapping file
 PASSWORD_MAP_FILE = "password_map.json"
 if not os.path.exists(PASSWORD_MAP_FILE):
     with open(PASSWORD_MAP_FILE, "w") as f:
@@ -50,13 +50,13 @@ MENTAL_HEALTH_CONDITIONS = [
 # Function to log response times to a file for analysis
 #def log_response_time(user_password, response_time, word_length):
      # Debug print to check the function is being called
- #   print("Logging response time and word length...")
-    # Log the response time to a file (you can customize this as needed)
-  #  log_entry = {
-   #     "user_password": user_password,
-    #    "timestamp": datetime.now().isoformat(),
-     #   "response_time": response_time , # in seconds
-      #  "word_length": word_length  # number of words in the response
+    #print("Logging response time and word length...", flush=True)
+     #Log the response time to a file (you can customize this as needed)
+    #log_entry = {
+     #   "user_password": user_password,
+      #  "timestamp": datetime.now().isoformat(),
+       # "response_time": response_time , # in seconds
+        #"word_length": word_length  # number of words in the response
     #}
 
      # Log file path
@@ -64,31 +64,31 @@ MENTAL_HEALTH_CONDITIONS = [
 
     # If the log file exists, append to it, otherwise create a new one
     #if os.path.exists(log_file):
-     #   print("Log file exists. Appending to the file...")
+     #   print("Log file exists. Appending to the file...",)
       #  with open(log_file, "r") as f:
-        #    logs = json.load(f)
-       # logs.append(log_entry)
-        #print("Log file does not exist. Creating new file...")
+       #     logs = json.load(f)
+        #logs.append(log_entry)
+        #print("Log file does not exist. Creating new file...", )
     #else:
      #   logs = [log_entry]
 
     #try:
-    #    with open(log_file, "w") as f:
-     #       json.dump(logs, f, indent=4)
-     #   print(f"Log saved successfully to {log_file}")
+     #   with open(log_file, "w") as f:
+      #      json.dump(logs, f, indent=4)
+       # print(f"Log saved successfully to {log_file}",)
     #except Exception as e:
-      #  print(f"Error saving log: {e}")
+     #   print(f"Error saving log: {e}", )
 
 
     
-
+#function to get the users name
 def get_user_name():
     # Prompt the user to speak their name
     print("Please say your name.")
-    user_name = get_speech_input()  # This will capture the user's speech using Whisper API (or a similar function)
+    user_name = get_speech_input()  # using whisper API
     
     if not user_name:
-        # If no speech is detected, fallback to keyboard input
+        # keyboard fallback
         print("No voice input detected. Please type your name:")
         user_name = input("Enter your name: ").strip()
 
@@ -127,17 +127,18 @@ def detect_emotion(message):
 
     return None
 
+#fucntion
 def check_mental_health_condition(user_message):
 
-   # Check if the user mentions any known mental health condition in their message.
+   #Checks if the user mentions any known mental health condition in their message.
     
     user_message_lower = user_message.lower()
 
     for condition in MENTAL_HEALTH_CONDITIONS:
         if condition in user_message_lower:
-            return condition  # Return the condition if found
+            return condition  #Return the condition if found
     
-    return None  # Return None if no condition is mentioned
+    return None  #if no condition is mentioned
 
 # Game question selection based on emotion
 def get_game_question(emotion):
@@ -150,27 +151,30 @@ def get_game_question(emotion):
     elif emotion == "angry":
         return "Would you rather calm down with some music or take a walk?"
     else:
-        return random.choice(WOULD_YOU_RATHER_QUESTIONS)  # Default question
+        return random.choice(WOULD_YOU_RATHER_QUESTIONS)  # Default questions
 
+#function to load users memory
 def load_memory(user_password):
     path = get_memory_path(user_password)
     if os.path.exists(path):
         with open(path, "r") as f:
             return json.load(f)
     else:
+        #system prompt if no memory exists
         return [{"role": "system", "content": "You are Pepper, a warm and friendly AI companion designed to help those suffering from mental health struggles. "
             "Keep your responses short and concise with no more than 20-30 words. "
             "Avoid providing medical diagnoses. Always respond in a human-like, empathetic, and supportive manner."
             "Your role is to offer encouragement, listen, and provide helpful suggestions, not to diagnose or treat medical conditions."
             "Ensure you maintain a compassionate and understanding tone."}]
-
+#function for memory
 def get_memory_path(user_password):
     return os.path.join(MEMORY_FOLDER, f"{user_password}_memory.json")
-
+#fucntion for 
 def save_memory(user_password, memory):
     with open(get_memory_path(user_password), "w") as f:
         json.dump(memory, f)
 
+#functions to load and save user profiles
 def load_profile(user_password):
     profile_path = os.path.join(PROFILE_FOLDER, f"{user_password}_profile.json")
     if os.path.exists(profile_path):
@@ -184,6 +188,7 @@ def save_profile(user_password, profile):
     with open(profile_path, "w") as f:
         json.dump(profile, f)
 
+#updates with new profile chnages
 def update_user_profile(user_password, key, value):
     profile = load_profile(user_password)
     if key not in profile:
@@ -197,7 +202,7 @@ def update_user_profile(user_password, key, value):
 
 
 
-# Handle user initialization (registration)
+# Handles user registration with passwords
 @chat_server.route("/init", methods=["POST"])
 def init():
     data = request.get_json()
@@ -215,20 +220,20 @@ def init():
             else:
                 return jsonify({"response": "Error: Incorrect password. Please try again.", "status": "error"})
         else:
-            # If the password is new, hash it and store it
+            # If the password is new, hash it and store it - doesnt work with pepper2.7_Tts_test (admin only)
             hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
-            # Prompt the user for their name (implement this in your client)
+            #Prompts the user for their name
             user_name = get_user_name()
 
-            # Store the new password and name in the password map
+            #Stores the new password and name in the password map
             password_map[password] = {"hash": hashed_password, "name": user_name}
 
-            # Save the updated password map to the file
+            #saves the updated password map to the file
             with open(PASSWORD_MAP_FILE, "w") as f:
                 json.dump(password_map, f)
 
-            # Store the name in the user's profile
+            #Stores the name in the user's profile
             save_profile(password, {"name": user_name})
 
             return jsonify({"response": f"Hi {user_name}! It seems like we have not met before. I'll remember you from now on.", "status": "new"})
@@ -236,7 +241,7 @@ def init():
     return jsonify({"response": "Sorry, I couldn't understand your password. Please try again."})
 
 
-# Handle conversation messages
+#Handles conversation messages
 @chat_server.route("/chat", methods=["POST"])
 def chat():
 
@@ -246,11 +251,11 @@ def chat():
     user_password = data.get("user", "default")
     user_message = data.get("message", "").strip()
 
-    # Debugging: print what the server hears
-    print(f"Whisper heard: {user_message}")  # This will log the exact message received by the server
+    # Debugging- prints what the server hears
+    print(f"Whisper heard: {user_message}")  
 
     if user_password:  
-        # Verify the password using bcrypt
+        #Verifies the password using bcrypt
         with open(PASSWORD_MAP_FILE, "r") as f:
             password_map = json.load(f)
 
@@ -262,15 +267,15 @@ def chat():
             else:
                 return jsonify({"response": "Incorrect password."})
 
-    # Check if the message is empty or null before proceeding
+    #Checks if the message is empty/null before proceeding
     if not user_message:
         return jsonify({"response": "I didn't catch that. Can you repeat, please?"})
     
         
     # Start timing before sending the request to OpenAI API FOR RESPONSE LOGGING
-   # start_time = time.time()
+    #start_time = time.time()
     
-     # Check for mental health conditions and update the profile if needed
+     #Checks for mental health conditions and update the profile if needed
     mental_health_keywords = ["depression", "anxiety", "stress", "burnout", "sad", "worried", "bipolar", "schizophrenia", "ptsd", 
     "ocd", "phobia", "panic disorder", "eating disorder", "addiction"]
     
@@ -283,7 +288,7 @@ def chat():
   
 
 
-    # Check for hobbies or preferences (e.g., "I like drawing")
+    #Checks for hobbies 
     hobbies_keywords = ["I like", "I enjoy", "My favorite", "I love", "I am passionate about"]
     for phrase in hobbies_keywords:
         if phrase.lower() in user_message.lower():
@@ -293,59 +298,59 @@ def chat():
             break
     
 
-    # Check for birthday input
+    #Checks for birthday input
     if "my birthday is" in user_message.lower():
         birthday = user_message.lower().replace("my birthday is", "").strip()
         update_user_profile(user_password, "birthday", birthday)
         
 
-    # Check for pet info
+    #Checks for pet info
     if "i have a pet" in user_message.lower():
         pet = user_message.lower().replace("i have a pet", "").strip()
         update_user_profile(user_password, "pet", pet)
         
 
-    # Check for favorite food
+    #Checks for favorite food
     if "my favorite food is" in user_message.lower():
         favorite_food = user_message.lower().replace("my favorite food is", "").strip()
         update_user_profile(user_password, "favorite_food", favorite_food)
         
 
-    # Check for favorite color
+    #Checks for favorite color
     if "my favorite color is" in user_message.lower():
         favorite_color = user_message.lower().replace("my favorite color is", "").strip()
         update_user_profile(user_password, "favorite_color", favorite_color)
         
 
-    # Handle "Let's play a game" and prioritize "Would You Rather"
+    #Handles "Let's play a game" and prioritise "Would You Rather"
     if "let's play a game" in user_message.lower():
         memory = load_memory(user_password)
 
-        # Add game prompt directly into memory
+        #adds game prompt directly into memory
         game_prompt = "Let's play 'Would You Rather'!"
         memory.append({"role": "assistant", "content": game_prompt})
         save_memory(user_password, memory)
 
-        # Return the game prompt immediately
+        #reurns the game prompt immediately
         return jsonify({"response": game_prompt})
 
-    # Handle the user's response after "Would You Rather" game is initiated
+    #handles the users response after "Would You Rather" game is initiated
     if "i would rather" in user_message.lower() or "would rather" in user_message.lower():
         memory = load_memory(user_password)
 
-        # Add the user's response to memory
+        #Adds the user's response to memory for future use
         memory.append({"role": "user", "content": user_message})
         save_memory(user_password, memory)
 
-        # Return a response from the model
+        #Returns a response from the chatGPT
         try:
             response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",  # Correct method for OpenAI API v0.28 or v1.0+
+                model="gpt-3.5-turbo",  
                 messages=memory
             )
             ai_reply = response['choices'][0]['message']['content']
 
-            # Ensure the response is valid and non-empty
+            #ensures the response is valid and non empty
             if ai_reply:
                 memory.append({"role": "assistant", "content": ai_reply})
                 save_memory(user_password, memory)
@@ -355,17 +360,17 @@ def chat():
 
         except Exception as e:
             print(f"Error during OpenAI request: {e}")
-            return jsonify({"response": "I'm having trouble connecting to my brain. Please try again later."})
+            return jsonify({"response": "I'm having trouble connecting to my brain. Please try again later."}) #debug and error handling
 
     # Regular conversation handling (only when not playing a game)
     memory = load_memory(user_password)
     memory.append({"role": "user", "content": user_message})
-    shortened_memory = [memory[0]] + memory[-20:]
+    shortened_memory = [memory[0]] + memory[-20:] #for token efficiency
 
     emotion = detect_emotion(user_message)
     if emotion:
         emotional_instruction = {
-        "sad": "The user seems sad...", #emotions generate via AI
+        "sad": "The user seems sad...", #emotions generated via AI
         "stressed": "The user seems stressed...",
         "anxiety": "The user seems anxious or worried...",
         "excited": "The user seems excited or thrilled...",
@@ -392,25 +397,25 @@ def chat():
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  # Ensure the model is available
+            model="gpt-3.5-turbo",  #ensures the model is available
             messages=shortened_memory
         )
 
          # End timing after receiving the response
-        end_time = time.time()
+        #end_time = time.time()
 #
         # Calculate the response time (in seconds)
         #response_time = end_time - start_time
 
         # Get the AI's response and calculate the word length (word count)
-        ai_reply = response['choices'][0]['message']['content']
-        word_length = len(ai_reply.split())  # Count the number of words in the response
+        #ai_reply = response['choices'][0]['message']['content']
+        #word_length = len(ai_reply.split())  # Count the number of words in the response
 
        # log_response_time(user_password, response_time, word_length)  # Log the response time
-
+#prompt
         ai_reply = response['choices'][0]['message']['content']
 
-        # Ensure the response is valid and non-empty
+        #Ensures the response is valid and non empty
         if ai_reply:
             memory.append({"role": "assistant", "content": ai_reply})
             save_memory(user_password, memory)
@@ -420,7 +425,7 @@ def chat():
 
     except Exception as e:
         print(f"Error during OpenAI request: {e}")
-        return jsonify({"response": "I'm having trouble connecting to my brain. Please try again later."})
+        return jsonify({"response": "I'm having trouble connecting to my brain. Please try again later."}) #debug
 
 
 if __name__ == "__main__":
