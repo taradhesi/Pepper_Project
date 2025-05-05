@@ -53,7 +53,7 @@ def is_valid_transcription(text):
 
 # Whisper STT input with a longer timeout and better error handling
 def get_speech_input(timeout=20):
-    recogniser = sr.Recogniser()
+    recogniser = sr.Recognizer()
     with sr.Microphone() as source:
         print("Listening for input...")
         try:
@@ -63,7 +63,7 @@ def get_speech_input(timeout=20):
             print("Listening timed out, no speech detected.")
             return ""
     try:
-        text = recogniser.recognise_whisper(audio).strip().lower()  # Whisper recogniser
+        text = recogniser.recognize_whisper(audio).strip().lower()  # Whisper recogniser
         print(f"Whisper heard: {text}")
         if is_valid_transcription(text):
             return text
